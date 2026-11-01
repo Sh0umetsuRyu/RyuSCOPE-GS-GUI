@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Secrets and local-only settings
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+private/
+local-config/
+user_data/
+userdata/
+logs/
+*.log
+*.log.*
+*.bak
+*.orig
+
+# Do not commit game data / Steam libraries / compatdata / prefixes
+steamapps/
+compatdata/
+pfx/
+SteamLibrary/
+SteamLibraries/
+steam-library/
+steam-libraries/
+steam-user-data/
+proton-prefixes/
+
+# Locally generated exports, bundles and logs
+*.AppImage
+*.tar.gz
+*.tar.xz
+*.zip
+*.core
+core.*
+
+# Scratch files
+.tmp/
+tmp/
+temp/

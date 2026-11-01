@@ -1,0 +1,11 @@
+RyuSCOPE GS v0.5.2 PORTABLE ICON + PACKAGING KIT
+
+Merge these files into the ACTUAL v0.5.2 source tree, preferably from a clean backup.
+No working v0.5.2 main.py/integrations.py is included here. Do not upload as a runnable release.
+
+Includes: original RyuSCOPE dragon-crosshair emblem, Linux desktop launcher,
+PyInstaller build helper, optional portable Steam library helper, updated docs.
+Does not contain: your directories, Steam games, Proton prefixes, credentials.
+
+Important: The Steam paths helper is NOT wired into your existing main.py automatically;
+we must inspect the actual working code first to integrate it without breaking games.
