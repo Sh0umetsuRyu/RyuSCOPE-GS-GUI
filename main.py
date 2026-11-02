@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from telemetry import DEFAULT_LOG_DIR, format_reading, read_gpu_sample, read_live_fps
@@ -28,17 +30,20 @@ from integrations import (GamescopeOptions, IntegrationError, build_gamescope_ar
     launch_direct, mangohud_configuration, mangohud_config_file, lact_devices,
     lact_request, LACT_SOCKET)
 
-from PySide6.QtCore import Qt, QTimer, Signal, QRectF
+from PySide6.QtCore import Qt, QTimer, Signal, QRectF, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QStackedWidget,
-    QVBoxLayout, QWidget, QSizePolicy, QPlainTextEdit, QFileDialog, QTreeWidget, QTreeWidgetItem
+    QVBoxLayout, QWidget, QSizePolicy, QPlainTextEdit, QFileDialog, QTreeWidget, QTreeWidgetItem,
+    QGraphicsOpacityEffect
 )
 
 ROOT = Path(__file__).resolve().parent
-LOGO = ROOT / 'assets' / 'ryuscope-logo.png'
+LOGO = next((p for p in (ROOT / 'assets' / 'ryuscope-logo.png',
+                         ROOT / 'assets' / 'ryuscope-emblem.png') if p.exists()),
+            ROOT / 'assets' / 'ryuscope-emblem.png')
 C = {
     'bg': '#090B0F', 'panel': '#14181F', 'panel2': '#1C212A',
     'border': '#323943', 'text': '#E5E9EF', 'muted': '#9AA5B3',
@@ -252,7 +257,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('RyuSCOPE GS | v0.5.2-dev Ryujinx')
+        self.setWindowTitle('RyuSCOPE GS | v1.0 Ryujinx')
         self.resize(1270, 830)
         self.setMinimumSize(940, 650)
         if LOGO.exists():
@@ -268,6 +273,8 @@ class MainWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.sidebar = None
         self.profile_names = ['Default Gaming', 'Competitive 120 FPS', 'Cinematic HDR (sample profile)']
+        self.mango_test_process = None
+        self._toast_generation = 0
         self.build_shell()
         self.build_pages()
         self.switch_page(0)
@@ -314,13 +321,29 @@ class MainWindow(QMainWindow):
             self.nav_buttons.append(btn)
         nv.addStretch(1)
         disclaimer, dl = panel(6, (12, 13, 12, 13))
-        dl.addWidget(label('●  v0.5.2 RYUJINX', 'eyebrow'))
+        dl.addWidget(label('●  v1.0 RYUJINX', 'eyebrow'))
         dl.addWidget(label('Real GPU data · LACT read-only\nSteam profiles require explicit Apply', 'muted'))
         nv.addWidget(disclaimer)
-        nv.addWidget(label('Steam + Ryujinx  ·  v0.5.2-dev', 'muted'))
+        nv.addWidget(label('Steam + Ryujinx  ·  v1.0', 'muted'))
         main.addWidget(nav)
         main.addWidget(self.pages, 1)
         self.statusBar().showMessage('Gamescope + Steam command mapping · MangoHud preview · LACT read-only · No GPU tuning')
+        # Nonblocking launch notification, with a short opacity fade.
+        self.launch_toast = QLabel('')
+        self.launch_toast.setStyleSheet(
+            'background: #252B34; color: #FFD32A; border: 1px solid #FFD32A; '
+            'border-radius: 5px; padding: 5px 10px; font-weight: 700;')
+        self.launch_toast_effect = QGraphicsOpacityEffect(self.launch_toast)
+        self.launch_toast.setGraphicsEffect(self.launch_toast_effect)
+        self.launch_toast_animation = QPropertyAnimation(
+            self.launch_toast_effect, b'opacity', self)
+        self.launch_toast_animation.setDuration(750)
+        self.launch_toast_animation.setStartValue(1.0)
+        self.launch_toast_animation.setEndValue(0.0)
+        self.launch_toast_animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.launch_toast_animation.finished.connect(self.launch_toast.hide)
+        self.statusBar().addPermanentWidget(self.launch_toast)
+        self.launch_toast.hide()
 
     def new_page(self):
         outer = QScrollArea()
@@ -752,6 +775,33 @@ class MainWindow(QMainWindow):
         self.launch_status = label('Checking Gamescope support…', 'muted')
         il.addWidget(self.launch_status)
         lo.addWidget(info)
+        # Safe test harness for MangoApp. The separate toggle never applies or
+        # changes a Steam profile; this button launches only Vulkan's vkcube.
+        test_panel, test_lo = panel()
+        test_lo.addWidget(label('GAMESCOPE + MANGOAPP · LIVE TEST', 'eyebrow'))
+        test_lo.addWidget(label('Run a 960×540 → 1280×720 windowed Vulkan test. '
+                                'Your game profiles and Display settings are untouched.', 'muted'))
+        self.mango_test_checkbox = QCheckBox('Enable MangoApp overlay (--mangoapp)')
+        self.mango_test_checkbox.setChecked(True)
+        test_lo.addWidget(self.mango_test_checkbox)
+        buttons = hbox()
+        self.mango_test_start = QPushButton('▶  Launch MangoApp Test')
+        self.mango_test_start.setObjectName('primary')
+        self.mango_test_start.clicked.connect(self.launch_mangoapp_test)
+        buttons.addWidget(self.mango_test_start)
+        self.mango_test_stop = QPushButton('■  Stop Test')
+        self.mango_test_stop.setEnabled(False)
+        self.mango_test_stop.clicked.connect(self.stop_mangoapp_test)
+        buttons.addWidget(self.mango_test_stop)
+        test_lo.addLayout(buttons)
+        self.mango_test_command = QPlainTextEdit()
+        self.mango_test_command.setReadOnly(True)
+        self.mango_test_command.setMaximumHeight(68)
+        test_lo.addWidget(self.mango_test_command)
+        self.mango_test_status = label('Ready for Gamescope/MangoApp dependency check.', 'muted')
+        test_lo.addWidget(self.mango_test_status)
+        self.mango_test_checkbox.toggled.connect(self.update_mangoapp_test_preview)
+        lo.addWidget(test_panel)
         # Steam library discovery is read-only. User-linked paths are saved only
         # under ~/.config/RyuSCOPE-GS; never in Steam's own configuration.
         library_panel, lp = panel()
@@ -891,6 +941,119 @@ class MainWindow(QMainWindow):
         self.overlay_opacity.changed.connect(self.update_launch_preview)
         self.refresh_profile_accounts()
         self.update_launch_preview()
+        self.update_mangoapp_test_preview()
+
+    def show_launch_toast(self, message):
+        """Show a small confirmation for two seconds, then fade away."""
+        self._toast_generation += 1
+        generation = self._toast_generation
+        self.launch_toast_animation.stop()
+        self.launch_toast_effect.setOpacity(1.0)
+        self.launch_toast.setText('✓  ' + message)
+        self.launch_toast.show()
+        QTimer.singleShot(2200, lambda: self._fade_launch_toast(generation))
+
+    def _fade_launch_toast(self, generation):
+        if generation == self._toast_generation and self.launch_toast.isVisible():
+            self.launch_toast_animation.start()
+
+    def mangoapp_test_options(self):
+        """Use a known windowed test preset, leaving actual GUI settings intact."""
+        return replace(self.current_options(),
+                       game_width=960, game_height=540,
+                       output_width=1280, output_height=720,
+                       mode='Windowed', refresh=60, frame_limit=0,
+                       scaler='Auto', scaling='Auto / Default',
+                       hdr=False, adaptive_sync=False,
+                       mangoapp=self.mango_test_checkbox.isChecked(),
+                       gamemode=False)
+
+    def update_mangoapp_test_preview(self, *_):
+        if not hasattr(self, 'mango_test_command'):
+            return
+        vkcube = shutil.which('vkcube')
+        if not vkcube:
+            self.mango_test_command.setPlainText('vkcube not found. Install vulkan-tools.')
+            self.mango_test_start.setEnabled(False)
+            return
+        try:
+            argv = direct_command(self.mangoapp_test_options(), vkcube, '',
+                                  self.gamescope_flags)
+            self.mango_test_command.setPlainText(shlex.join(argv))
+        except IntegrationError as exc:
+            self.mango_test_command.setPlainText('Preview unavailable: ' + str(exc))
+        self.mango_test_start.setEnabled(self.mango_test_process is None or
+                                        self.mango_test_process.poll() is not None)
+
+    def launch_mangoapp_test(self):
+        """Launch an isolated vkcube session through the real integration layer."""
+        if self.mango_test_process is not None and self.mango_test_process.poll() is None:
+            self.mango_test_status.setText('Test already running. Stop it first.')
+            return
+        if self.gamescope_flags is None:
+            QMessageBox.warning(self, 'Gamescope unavailable',
+                'Refresh installed tools and verify Gamescope before launching.')
+            return
+        vkcube = shutil.which('vkcube')
+        if not vkcube:
+            QMessageBox.warning(self, 'vkcube missing',
+                'Install vulkan-tools to run the Vulkan test.')
+            return
+        enabled = self.mango_test_checkbox.isChecked()
+        if enabled and not detect_command('mangoapp'):
+            QMessageBox.warning(self, 'MangoApp missing',
+                'MangoApp is not installed. Disable the test checkbox or install mangohud.')
+            return
+        if enabled:
+            try:
+                if '--mangoapp' not in gamescope_help():
+                    raise IntegrationError('This Gamescope version does not advertise --mangoapp.')
+            except IntegrationError as exc:
+                QMessageBox.warning(self, 'MangoApp not supported', str(exc))
+                return
+        try:
+            options = self.mangoapp_test_options()
+            # This is only an overlay visibility test, not a telemetry CSV test.
+            config = (mangohud_configuration(['FPS', 'Frametime', 'GPU temperature'],
+                                             'Top left', 85) if enabled else '')
+            self.mango_test_process = launch_direct(
+                options, vkcube, '', self.gamescope_flags, config)
+        except (IntegrationError, OSError, ValueError) as exc:
+            self.mango_test_status.setText('Launch failed: ' + str(exc))
+            QMessageBox.warning(self, 'Test failed', str(exc))
+            return
+        pid = self.mango_test_process.pid
+        self.mango_test_start.setEnabled(False)
+        self.mango_test_stop.setEnabled(True)
+        self.mango_test_status.setText(
+            f'Launch requested (PID {pid}). Checking that Gamescope stays running…')
+        self.show_launch_toast('Gamescope test requested · MangoApp ' +
+                               ('on' if enabled else 'off'))
+        QTimer.singleShot(1400, self.check_mangoapp_test)
+
+    def check_mangoapp_test(self):
+        process = self.mango_test_process
+        if process is None:
+            return
+        code = process.poll()
+        if code is None:
+            self.mango_test_status.setText(
+                'Gamescope test process is running. Verify the overlay visually in vkcube.')
+            QTimer.singleShot(1200, self.check_mangoapp_test)
+        else:
+            self.mango_test_status.setText(
+                f'Test process exited (code {code}). If no window appeared, '
+                'run from Konsole for Gamescope diagnostics.')
+            self.mango_test_process = None
+            self.mango_test_stop.setEnabled(False)
+            self.mango_test_start.setEnabled(True)
+
+    def stop_mangoapp_test(self):
+        process = self.mango_test_process
+        if process is not None and process.poll() is None:
+            process.terminate()  # Only terminate the test process we launched.
+            self.mango_test_status.setText('Stop requested for Gamescope test process.')
+        self.mango_test_stop.setEnabled(False)
 
     def build_ryujinx(self):
         """Ryujinx launcher is independent of Steam's launch options."""
@@ -1148,6 +1311,8 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(
             f'Ryujinx launch requested (PID {process.pid}). Confirm the emulator/game opened.', 15000)
+        self.show_launch_toast('Ryujinx launch requested · Gamescope ' +
+                               ('on' if self.ryu_with_gamescope.isChecked() else 'off'))
 
     def refresh_steam_games(self, *_):
         """Scan manifests only; never open game EXEs or alter Steam files."""
@@ -1393,6 +1558,9 @@ class MainWindow(QMainWindow):
             f'Steam launch requested: {game.name} ({game.app_id}), PID {process.pid}. '
             + ('Gamescope profile applied; verify process after startup.' if state == 'Applied'
                else 'No verified RyuSCOPE Gamescope profile applied.'), 15000)
+        self.show_launch_toast('Steam launch requested · ' +
+                               ('Gamescope profile applied' if state == 'Applied'
+                                else 'profile not verified'))
 
     def update_launch_preview(self, *_):
         if not hasattr(self, 'steam_command'):
@@ -1460,7 +1628,9 @@ class MainWindow(QMainWindow):
         except IntegrationError as exc:
             QMessageBox.warning(self, 'Launch blocked', str(exc))
             return
-        self.statusBar().showMessage(f'Gamescope launched game (PID {process.pid}).', 15000)
+        self.statusBar().showMessage(f'Gamescope launch requested (PID {process.pid}).', 15000)
+        self.show_launch_toast('Gamescope launch requested · MangoApp ' +
+                               ('on' if self.mango_enabled.isChecked() else 'off'))
 
     def refresh_integrations(self):
         statuses = {
@@ -1489,6 +1659,7 @@ class MainWindow(QMainWindow):
         self.update_launch_preview()
         self.update_steam_profile_preview()
         self.update_ryujinx_preview()
+        self.update_mangoapp_test_preview()
 
     def export_mango_config(self):
         path, _ = QFileDialog.getSaveFileName(self, 'Export RyuSCOPE MangoHud configuration',
