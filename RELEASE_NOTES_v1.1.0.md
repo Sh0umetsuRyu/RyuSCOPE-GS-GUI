@@ -4,7 +4,13 @@
 
 [v1.0 remains the stable release](https://github.com/Sh0umetsuRyu/RyuSCOPE-GS-GUI/releases/tag/v1.0).
 
-This snapshot adds RyuFG, an experimental, opt-in integration with AFMF-Linux 1.3.1. It defaults off, including for existing profiles. The development code wires RyuFG into direct launches, Steam launch options and native Ryujinx. Steam Apply and Copy can stage a gated Vulkan layer in the user's local data directory. RyuFG targets 64-bit Vulkan, including games using DXVK or VKD3D-Proton. See the [RyuFG guide](https://github.com/Sh0umetsuRyu/RyuSCOPE-GS-GUI/blob/v1.1.0/docs/RYUFG.md) for scope and build instructions.
+## Upstream credits
+
+**RyuFG-AFMF** is RyuSCOPE’s opt-in launcher integration for [AFMF-Linux v1.3.1](https://github.com/serialexperimentslainnnn/afmf-linux/tree/e738127530ebf4a8b070b9fb38469377958120a7), developed by Lain and upstream contributors. AFMF-Linux supplies the frame-generation implementation and includes AMD FidelityFX shader code. RyuSCOPE builds the upstream code and shaders as-is and adapts the Vulkan manifest for per-game activation. Packaged builds include [AFMF-Linux’s MIT notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/LICENSE) and the [AMD FidelityFX notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/shaders/fidelityfx/LICENSE.txt).
+
+## Integration
+
+RyuFG-AFMF is experimental and defaults off, including for existing profiles. The development code wires RyuFG into direct launches, Steam launch options and native Ryujinx. Steam Apply and Copy can stage a gated Vulkan layer in the user's local data directory. RyuFG targets 64-bit Vulkan, including games using DXVK or VKD3D-Proton. See the [RyuFG guide](https://github.com/Sh0umetsuRyu/RyuSCOPE-GS-GUI/blob/v1.1.0/docs/RYUFG.md) for scope and build instructions.
 
 ## Validation and remaining work
 

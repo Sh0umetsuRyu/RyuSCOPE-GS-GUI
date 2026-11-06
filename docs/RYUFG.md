@@ -1,14 +1,6 @@
-# RyuFG in RyuSCOPE GS v1.1
+# RyuFG-AFMF in RyuSCOPE GS v1.1
 
-RyuFG is the frame-generation provider in RyuSCOPE’s launch pipeline. It uses
-AFMF-Linux v1.3.1, pinned to
-[`e738127530ebf4a8b070b9fb38469377958120a7`](https://github.com/serialexperimentslainnnn/afmf-linux/tree/e738127530ebf4a8b070b9fb38469377958120a7).
-The AFMF layer and the AMD FidelityFX shader code both carry MIT terms. The
-bundle includes both license texts and upstream provenance. The upstream C
-code and shaders are built unmodified. RyuFG adapts the Vulkan manifest to
-use a relative library path and a RyuSCOPE-specific activation gate.
-[AFMF license](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/LICENSE) ·
-[FidelityFX license](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/shaders/fidelityfx/LICENSE.txt)
+**RyuFG-AFMF** is RyuSCOPE’s opt-in launcher integration for [AFMF-Linux v1.3.1](https://github.com/serialexperimentslainnnn/afmf-linux/tree/e738127530ebf4a8b070b9fb38469377958120a7), developed by Lain and upstream contributors. AFMF-Linux supplies the frame-generation implementation and includes AMD FidelityFX shader code. RyuSCOPE builds the upstream code and shaders as-is and adapts the Vulkan manifest for per-game activation. Packaged builds include [AFMF-Linux’s MIT notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/LICENSE) and the [AMD FidelityFX notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/shaders/fidelityfx/LICENSE.txt).
 
 ## Build and use
 
@@ -23,7 +15,7 @@ use a relative library path and a RyuSCOPE-specific activation gate.
   to build the portable app, which includes the payload at
   `plugins/ryufg` beside its executable. Keep the onedir bundle together when
   moving it.
-- In **Performance**, enable **RyuFG (AFMF-Linux)** for the launch profile.
+- In **Performance**, enable **RyuFG-AFMF** for the launch profile.
   The setting defaults off, including in profiles saved before v1.1.
   For Steam, select the game and apply its profile, or use **Copy Steam
   launch options** and paste into that game's properties. To turn it off for

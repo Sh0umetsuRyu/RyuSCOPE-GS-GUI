@@ -2,9 +2,11 @@
 
 > **v1.1.0 development snapshot · WIP · Development ON HOLD**
 >
-> RyuFG is experimental and real-game frame generation remains unverified. Development is paused while reported RX 7800 XT junction temperatures up to 110°C and an approximately 45°C junction-to-edge delta are investigated. A hardware thermal-contact issue is suspected and remains unverified. See the [release notes](RELEASE_NOTES_v1.1.0.md) for test coverage and the hardware hold.
+> RyuFG-AFMF is experimental and real-game frame generation remains unverified. Development is paused while reported RX 7800 XT junction temperatures up to 110°C and an approximately 45°C junction-to-edge delta are investigated. A hardware thermal-contact issue is suspected and remains unverified. See the [release notes](RELEASE_NOTES_v1.1.0.md) for test coverage and the hardware hold.
 
 **RyujinWARE™ | Gamescope GUI for Linux**
+
+**RyuFG-AFMF** is RyuSCOPE’s opt-in launcher integration for [AFMF-Linux v1.3.1](https://github.com/serialexperimentslainnnn/afmf-linux/tree/e738127530ebf4a8b070b9fb38469377958120a7), developed by Lain and upstream contributors. AFMF-Linux supplies the frame-generation implementation and includes AMD FidelityFX shader code. RyuSCOPE builds the upstream code and shaders as-is and adapts the Vulkan manifest for per-game activation. Packaged builds include [AFMF-Linux’s MIT notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/LICENSE) and the [AMD FidelityFX notice](https://github.com/serialexperimentslainnnn/afmf-linux/blob/e738127530ebf4a8b070b9fb38469377958120a7/shaders/fidelityfx/LICENSE.txt).
 
 > **TESTED ON AMD HARDWARE ONLY**: development and game-launch testing have been performed on a **Radeon RX 7800 XT** running CachyOS Linux. NVIDIA and Intel GPUs have **not been validated**. These results do not establish compatibility with all AMD GPUs, distros, display servers or drivers.
 

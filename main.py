@@ -258,7 +258,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('RyuSCOPE GS | v1.1 RyuFG')
+        self.setWindowTitle('RyuSCOPE GS | v1.1 RyuFG-AFMF')
         self.resize(1270, 830)
         self.setMinimumSize(940, 650)
         if LOGO.exists():
@@ -322,7 +322,7 @@ class MainWindow(QMainWindow):
             self.nav_buttons.append(btn)
         nv.addStretch(1)
         disclaimer, dl = panel(6, (12, 13, 12, 13))
-        dl.addWidget(label('●  v1.1 RYUFG', 'eyebrow'))
+        dl.addWidget(label('●  v1.1 RYUFG-AFMF', 'eyebrow'))
         dl.addWidget(label('Real GPU data · LACT read-only\nSteam profiles require explicit Apply', 'muted'))
         nv.addWidget(disclaimer)
         nv.addWidget(label('Steam + Ryujinx  ·  v1.1', 'muted'))
@@ -541,7 +541,7 @@ class MainWindow(QMainWindow):
         lo.addWidget(main)
         framegen, fgl = panel()
         fgl.addWidget(label('FRAME GENERATION', 'eyebrow'))
-        self.framegen = QCheckBox('Enable RyuFG (AFMF-Linux) for this launch profile')
+        self.framegen = QCheckBox('Enable RyuFG-AFMF for this launch profile')
         fgl.addWidget(self.framegen)
         fgl.addWidget(label('Experimental · 64-bit Vulkan or Proton with DXVK/VKD3D. Disable other frame generation in the game before enabling RyuFG.', 'muted'))
         self.ryufg_status = label(ryufg.status(), 'muted')
