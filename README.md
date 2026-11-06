@@ -1,5 +1,9 @@
 # RyuSCOPE GS v1.0
 
+> **v1.1.0 development snapshot · WIP · Development ON HOLD**
+>
+> RyuFG is experimental and real-game frame generation remains unverified. Development is paused while reported RX 7800 XT junction temperatures up to 110°C and an approximately 45°C junction-to-edge delta are investigated. A hardware thermal-contact issue is suspected and remains unverified. See the [release notes](RELEASE_NOTES_v1.1.0.md) for test coverage and the hardware hold.
+
 **RyujinWARE™ | Gamescope GUI for Linux**
 
 > **TESTED ON AMD HARDWARE ONLY**: development and game-launch testing have been performed on a **Radeon RX 7800 XT** running CachyOS Linux. NVIDIA and Intel GPUs have **not been validated**. These results do not establish compatibility with all AMD GPUs, distros, display servers or drivers.
