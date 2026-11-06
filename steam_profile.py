@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from integrations import GamescopeOptions, build_gamescope_args
+from integrations import GamescopeOptions, IntegrationError, build_gamescope_args, ryufg_prefix
+from plugins import ryufg
 
 
 class SteamProfileError(RuntimeError):
@@ -409,13 +410,18 @@ def _migrate_legacy_mangohud(existing: str | None) -> str | None:
     return existing
 
 
-def compose_launch_options(existing: str | None, args: list[str], mango_config: str = '') -> str:
+def compose_launch_options(existing: str | None, args: list[str], mango_config: str = '',
+                           *, child: list[str] | None = None) -> str:
     if not args or 'gamescope' not in args:
         raise SteamProfileError('Generated command has no Gamescope executable.')
     # Steam substitutes %command%. Prefix/suffix settings are retained verbatim.
-    wrapper = ' '.join(shlex.quote(x) for x in args) + ' -- '
-    if mango_config:
-        wrapper = 'MANGOHUD_CONFIG=' + shlex.quote(mango_config) + ' ' + wrapper
+    settings = [f'MANGOHUD_CONFIG={mango_config}'] if mango_config else []
+    if child:
+        # Existing wrappers may require an executable immediately before %command%.
+        wrapper = shlex.join(['env', *settings, 'DISABLE_AFMF=1', *args, '--', *child]) + ' '
+    else:
+        prefix = 'MANGOHUD_CONFIG=' + shlex.quote(mango_config) + ' ' if mango_config else ''
+        wrapper = prefix + shlex.join(args) + ' -- '
     if existing is None or not existing.strip():
         return wrapper + '%command%'
     if existing.count('%command%') != 1:
@@ -440,6 +446,7 @@ def profile_status(config: Path, app_id: int, *, state_path: Path | None = None)
 
 def apply_profile(config: Path, app_id: int, o: GamescopeOptions, flags: set[str] | None,
                   *, mango_config: str = '', state_path: Path | None = None,
+                  game_dir: Path | None = None,
                   running: Callable[[], bool] = steam_is_running) -> tuple[str, Path | None]:
     if running():
         raise SteamProfileError('Steam is running. Quit Steam completely before applying a Gamescope profile.')
@@ -464,7 +471,12 @@ def apply_profile(config: Path, app_id: int, o: GamescopeOptions, flags: set[str
     base = _migrate_legacy_mangohud(original) if o.mangoapp else original
     args = build_gamescope_args(o, flags)
     # Re-applying our settings must wrap the ORIGINAL, never the previously wrapped value.
-    next_options = compose_launch_options(base, args, mango_config)
+    next_options = _compose_profile(base, args, o, mango_config, game_dir)
+    if o.ryufg:
+        try:
+            ryufg.prepare_steam()
+        except ryufg.RyuFGError as exc:
+            raise SteamProfileError(str(exc)) from exc
     if next_options == current:
         return next_options, None
     new_text = edit_launch_options(old_text, app_id, next_options)
@@ -496,7 +508,8 @@ def restore_profile(config: Path, app_id: int, *, state_path: Path | None = None
 
 
 def preview_profile(config: Path, app_id: int, o: GamescopeOptions, flags: set[str] | None,
-                    *, mango_config: str = '', state_path: Path | None = None) -> tuple[str | None, str, str]:
+                    *, mango_config: str = '', state_path: Path | None = None,
+                      game_dir: Path | None = None) -> tuple[str | None, str, str]:
     """Read-only preview: current, proposed, status. Never writes Steam files."""
     if flags is None:
         raise SteamProfileError('Gamescope options are not validated yet.')
@@ -506,5 +519,16 @@ def preview_profile(config: Path, app_id: int, o: GamescopeOptions, flags: set[s
     base = record['original'] if record and status == 'Applied' else current
     if o.mangoapp:
         base = _migrate_legacy_mangohud(base)
-    target = compose_launch_options(base, build_gamescope_args(o, flags), mango_config)
+    target = _compose_profile(base, build_gamescope_args(o, flags), o, mango_config, game_dir)
     return current, target, status
+
+
+def _compose_profile(existing: str | None, args: list[str], options: GamescopeOptions,
+                     mango_config: str, game_dir: Path | None) -> str:
+    try:
+        child = ryufg_prefix(options, steam=True, existing=existing or '', game_dir=game_dir)
+    except IntegrationError as exc:
+        raise SteamProfileError(str(exc)) from exc
+    # Put compositor settings inside any existing env/launcher wrapper.
+    # An env executable also works after wrappers that require a command name.
+    return compose_launch_options(existing, args, mango_config, child=child)

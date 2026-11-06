@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from plugins import ryufg
+
 
 class IntegrationError(RuntimeError):
     pass
@@ -38,6 +40,7 @@ class GamescopeOptions:
     adaptive_sync: bool = False
     mangoapp: bool = False
     gamemode: bool = False
+    ryufg: bool = False
 
 
 # Only launch flags corresponding to supported, validated UI controls.
@@ -73,6 +76,8 @@ def detect_flags(help_text: str) -> set[str]:
 
 
 def validate_options(o: GamescopeOptions) -> None:
+    if type(o.ryufg) is not bool:
+        raise IntegrationError('RyuFG must be enabled or disabled explicitly.')
     for value in (o.game_width, o.game_height, o.output_width, o.output_height):
         if not 320 <= value <= 16384:
             raise IntegrationError('Resolution must be 320–16384 pixels per dimension.')
@@ -156,9 +161,16 @@ def steam_launch_options(o: GamescopeOptions, flags: set[str] | None = None,
                          mangohud_config: str = '') -> str:
     prefix = build_gamescope_args(o, flags)
     # MangoHud env configuration is scoped to this game. We do not modify any global file.
-    tokens = [shlex.quote(x) for x in prefix]
     env = ('MANGOHUD_CONFIG=' + shlex.quote(mangohud_config) + ' ') if o.mangoapp and mangohud_config else ''
-    return env + ' '.join(tokens) + ' -- %command%'
+    child = ryufg_prefix(o, steam=True)
+    return env + 'DISABLE_AFMF=1 ' + shlex.join(prefix + ['--'] + child) + ' %command%'
+
+
+def ryufg_prefix(o: GamescopeOptions, **kwargs) -> list[str]:
+    try:
+        return ryufg.game_prefix(o.ryufg, **kwargs)
+    except ryufg.RyuFGError as exc:
+        raise IntegrationError(str(exc)) from exc
 
 
 def direct_command(o: GamescopeOptions, executable: str, arguments: str,
@@ -173,7 +185,8 @@ def direct_command(o: GamescopeOptions, executable: str, arguments: str,
         extra = shlex.split(arguments, posix=True)
     except ValueError as exc:
         raise IntegrationError(f'Invalid arguments: {exc}') from exc
-    return build_gamescope_args(o, flags) + ['--', str(binary)] + extra
+    child = ryufg_prefix(o, existing=arguments, game_dir=Path(binary).resolve().parent)
+    return build_gamescope_args(o, flags) + ['--'] + child + [str(binary)] + extra
 
 
 def launch_direct(o: GamescopeOptions, executable: str, arguments: str,
@@ -187,6 +200,7 @@ def launch_direct(o: GamescopeOptions, executable: str, arguments: str,
     if o.mangoapp and not detect_command('mangoapp'):
         raise IntegrationError('mangoapp is missing: install the mangoapp package.')
     env = os.environ.copy()
+    env['DISABLE_AFMF'] = '1'
     if o.mangoapp and mangohud_config:
         env['MANGOHUD_CONFIG'] = mangohud_config
     try:

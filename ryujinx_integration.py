@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Iterable
 
 from integrations import (GamescopeOptions, IntegrationError,
-                          build_gamescope_args, detect_command)
+                          build_gamescope_args, ryufg_prefix, detect_command)
 
 
 class RyujinxError(RuntimeError):
@@ -209,10 +209,11 @@ def build_ryujinx_command(source: str, executable: str,
         if fullscreen:
             runner.append('--fullscreen')
         runner.append(str(game_path))
-    if not use_gamescope:
-        return runner
+    if options.ryufg and runner[0] == 'flatpak':
+        raise RyujinxError('RyuFG requires a native Ryujinx executable outside Flatpak.')
     try:
-        return build_gamescope_args(options, flags) + ['--'] + runner
+        child = ryufg_prefix(options, gamescope=use_gamescope) + runner
+        return build_gamescope_args(options, flags) + ['--'] + child if use_gamescope else child
     except IntegrationError as exc:
         raise RyujinxError(str(exc)) from exc
 
@@ -232,6 +233,7 @@ def launch_ryujinx(source: str, executable: str,
         if options.mangoapp and not detect_command('mangoapp'):
             raise RyujinxError('Mangoapp overlay is enabled but mangoapp is missing.')
     env = os.environ.copy()
+    env['DISABLE_AFMF'] = '1'
     if use_gamescope and options.mangoapp and mangohud_config:
         env['MANGOHUD_CONFIG'] = mangohud_config
     try:

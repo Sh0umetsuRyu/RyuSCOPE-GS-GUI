@@ -25,6 +25,7 @@ from steam_library import (SteamLibraryError, SteamGame, library_root,
     load_manual_libraries, save_manual_libraries, find_libraries, scan_libraries,
     launch_steam_game)
 
+from plugins import ryufg
 from integrations import (GamescopeOptions, IntegrationError, build_gamescope_args,
     detect_command, gamescope_help, detect_flags, steam_launch_options, direct_command,
     launch_direct, mangohud_configuration, mangohud_config_file, lact_devices,
@@ -257,7 +258,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('RyuSCOPE GS | v1.0 Ryujinx')
+        self.setWindowTitle('RyuSCOPE GS | v1.1 RyuFG')
         self.resize(1270, 830)
         self.setMinimumSize(940, 650)
         if LOGO.exists():
@@ -321,10 +322,10 @@ class MainWindow(QMainWindow):
             self.nav_buttons.append(btn)
         nv.addStretch(1)
         disclaimer, dl = panel(6, (12, 13, 12, 13))
-        dl.addWidget(label('●  v1.0 RYUJINX', 'eyebrow'))
+        dl.addWidget(label('●  v1.1 RYUFG', 'eyebrow'))
         dl.addWidget(label('Real GPU data · LACT read-only\nSteam profiles require explicit Apply', 'muted'))
         nv.addWidget(disclaimer)
-        nv.addWidget(label('Steam + Ryujinx  ·  v1.0', 'muted'))
+        nv.addWidget(label('Steam + Ryujinx  ·  v1.1', 'muted'))
         main.addWidget(nav)
         main.addWidget(self.pages, 1)
         self.statusBar().showMessage('Gamescope + Steam command mapping · MangoHud preview · LACT read-only · No GPU tuning')
@@ -540,10 +541,12 @@ class MainWindow(QMainWindow):
         lo.addWidget(main)
         framegen, fgl = panel()
         fgl.addWidget(label('FRAME GENERATION', 'eyebrow'))
-        self.framegen = QCheckBox('Enable frame generation')
-        self.framegen.setEnabled(False)
+        self.framegen = QCheckBox('Enable RyuFG (AFMF-Linux) for this launch profile')
         fgl.addWidget(self.framegen)
-        fgl.addWidget(label('Not available through the standard Gamescope 3.17 CLI. No universal frame-generation flag is advertised. Future integration must detect a supported provider.', 'muted'))
+        fgl.addWidget(label('Experimental · 64-bit Vulkan or Proton with DXVK/VKD3D. Disable other frame generation in the game before enabling RyuFG.', 'muted'))
+        self.ryufg_status = label(ryufg.status(), 'muted')
+        self.ryufg_status.setWordWrap(True)
+        fgl.addWidget(self.ryufg_status)
         lo.addWidget(framegen)
         metrics, mm = panel()
         mm.addWidget(label('MEASURED FPS HISTORY · MANGOHUD CSV', 'eyebrow'))
@@ -755,7 +758,8 @@ class MainWindow(QMainWindow):
                                 hdr=self.hdr.isChecked(),
                                 adaptive_sync=self.vrr.isChecked(),
                                 mangoapp=self.mango_enabled.isChecked(),
-                                gamemode=self.gamemode.isChecked())
+                                gamemode=self.gamemode.isChecked(),
+                                ryufg=self.framegen.isChecked())
 
     def current_mango_config(self):
         enabled = [key for key, cb in self.overlay_checks.items() if cb.isChecked()]
@@ -933,7 +937,7 @@ class MainWindow(QMainWindow):
             control.currentIndexChanged.connect(self.update_launch_preview)
         for widget in (self.sharpness,):
             widget.changed.connect(self.update_launch_preview)
-        for widget in (self.hdr, self.vrr, self.gamemode):
+        for widget in (self.hdr, self.vrr, self.gamemode, self.framegen):
             widget.toggled.connect(self.update_launch_preview)
         for widget in self.overlay_checks.values():
             widget.toggled.connect(self.update_launch_preview)
@@ -1155,7 +1159,7 @@ class MainWindow(QMainWindow):
         for control in (self.game_resolution, self.output_resolution,
                         self.window_mode, self.scaler_mode, self.scaling):
             control.currentIndexChanged.connect(self.update_ryujinx_preview)
-        for box in (self.hdr, self.vrr, self.gamemode, self.mango_enabled):
+        for box in (self.hdr, self.vrr, self.gamemode, self.mango_enabled, self.framegen):
             box.toggled.connect(self.update_ryujinx_preview)
         self.refresh_ryujinx_games()
 
@@ -1446,7 +1450,7 @@ class MainWindow(QMainWindow):
                 return
             existing, target, state = preview_profile(
                 config, game.app_id, self.current_options(), self.gamescope_flags,
-                mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
+                game_dir=game.directory, mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
             self.steam_profile_status.setText(
                 f'{game.name} · {state} · Steam ' + ('running' if steam_is_running() else 'closed'))
             self.steam_profile_preview.setPlainText(
@@ -1482,8 +1486,10 @@ class MainWindow(QMainWindow):
                 raise SteamProfileError('mangoapp was not found on PATH. The new Gamescope overlay is unavailable; original Steam MangoHud settings were not changed.')
             old, new, state = preview_profile(
                 config, game.app_id, self.current_options(), self.gamescope_flags,
-                mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
+                game_dir=game.directory, mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
             if old == new and state == 'Applied':
+                if self.framegen.isChecked():
+                    ryufg.prepare_steam()
                 QMessageBox.information(self, 'Already applied', 'This exact Gamescope profile is already applied.')
                 return
             if steam_is_running():
@@ -1503,8 +1509,8 @@ class MainWindow(QMainWindow):
                 DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
             applied, backup = apply_profile(
                 config, game.app_id, self.current_options(), self.gamescope_flags,
-                mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
-        except (SteamProfileError, IntegrationError, OSError, ValueError) as exc:
+                game_dir=game.directory, mango_config=self.current_mango_config() if self.mango_enabled.isChecked() else '')
+        except (SteamProfileError, IntegrationError, ryufg.RyuFGError, OSError, ValueError) as exc:
             QMessageBox.warning(self, 'Gamescope profile not applied', str(exc))
             self.update_steam_profile_preview()
             return
@@ -1575,8 +1581,8 @@ class MainWindow(QMainWindow):
                 direct = direct_command(o, self.game_path.text(), self.game_args.text(), flags)
                 from shlex import join
                 direct_text = join(direct)
-            except IntegrationError:
-                direct_text = '(Select an executable to preview and launch directly.)'
+            except IntegrationError as exc:
+                direct_text = str(exc)
             self.direct_preview.setPlainText(direct_text)
             detected = bool(self.integrations.get('Gamescope')) and self.gamescope_flags is not None
             self.launch_status.setText('● Gamescope flags validated on this PC' if detected else
@@ -1607,9 +1613,15 @@ class MainWindow(QMainWindow):
                 'Install Gamescope (or resolve --help errors), then refresh detection before copying launch options.')
             return
         text = self.steam_command.toPlainText()
-        if not text.startswith(('gamescope ', 'gamemoderun ', 'MANGOHUD_CONFIG=')):
+        if not text.startswith(('DISABLE_AFMF=1 ', 'MANGOHUD_CONFIG=')):
             QMessageBox.warning(self, 'Command invalid', 'Review selected settings and regenerate.')
             return
+        if self.framegen.isChecked():
+            try:
+                ryufg.prepare_steam()
+            except ryufg.RyuFGError as exc:
+                QMessageBox.warning(self, 'RyuFG unavailable', str(exc))
+                return
         QApplication.clipboard().setText(text)
         self.statusBar().showMessage('Steam launch options copied. Paste manually into the selected game in Steam.', 12000)
 
@@ -1633,6 +1645,7 @@ class MainWindow(QMainWindow):
                                ('on' if self.mango_enabled.isChecked() else 'off'))
 
     def refresh_integrations(self):
+        self.ryufg_status.setText(ryufg.status())
         statuses = {
             'Gamescope': detect_command('gamescope'),
             'MangoHud / mangoapp': detect_command('mangoapp'),
@@ -1741,6 +1754,7 @@ class MainWindow(QMainWindow):
         self.vrr.setChecked(o.adaptive_sync)
         self.mango_enabled.setChecked(o.mangoapp)
         self.gamemode.setChecked(o.gamemode)
+        self.framegen.setChecked(o.ryufg)
         choose(self.overlay_pos, position)
         for key, cb in self.overlay_checks.items():
             cb.setChecked(key in obj.get('overlay_metrics', []))

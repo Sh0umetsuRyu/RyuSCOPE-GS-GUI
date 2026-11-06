@@ -11,8 +11,11 @@ cd "$ROOT"
 .venv/bin/python -m PyInstaller --version >/dev/null 2>&1 || {
   echo 'PyInstaller is not installed in .venv. Run .venv/bin/python -m pip install pyinstaller and retry.' >&2; exit 2;
 }
+[[ -f build/ryufg/ryuscope-ryufg.json && -f build/ryufg/libafmf-linux.so ]] || scripts/build-ryufg.sh
 # Using onedir makes dependencies easier to inspect and debug than onefile.
 .venv/bin/python -m PyInstaller --noconfirm --clean --onedir --windowed \
   --name RyuSCOPE-GS --add-data 'assets/ryuscope-emblem.png:assets' main.py
+mkdir -p dist/RyuSCOPE-GS/plugins
+cp -R build/ryufg dist/RyuSCOPE-GS/plugins/ryufg
 printf '\nBundled binary: %s/dist/RyuSCOPE-GS/RyuSCOPE-GS\n' "$ROOT"
 printf 'Bundling Python does NOT bundle host Gamescope, Steam, Proton, GPU drivers, or MangoHud.\n'
